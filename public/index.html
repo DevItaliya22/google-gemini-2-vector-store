@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Image Search</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        font-family:
+          system-ui,
+          -apple-system,
+          sans-serif;
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 2rem;
+        background: #0f0f0f;
+        color: #e4e4e4;
+        min-height: 100vh;
+      }
+      h1 {
+        font-size: 1.5rem;
+        margin-bottom: 0.5rem;
+      }
+      .sub {
+        color: #888;
+        font-size: 0.9rem;
+        margin-bottom: 1.5rem;
+      }
+      .search-row {
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 1.5rem;
+      }
+      input[type="text"] {
+        flex: 1;
+        padding: 0.75rem 1rem;
+        border: 1px solid #333;
+        border-radius: 8px;
+        background: #1a1a1a;
+        color: #e4e4e4;
+        font-size: 1rem;
+      }
+      input[type="text"]:focus {
+        outline: none;
+        border-color: #6366f1;
+      }
+      button {
+        padding: 0.75rem 1.25rem;
+        border: none;
+        border-radius: 8px;
+        background: #6366f1;
+        color: white;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button:hover {
+        background: #4f46e5;
+      }
+      button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+      .btn-secondary {
+        background: #333;
+      }
+      .btn-secondary:hover {
+        background: #444;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        gap: 1rem;
+      }
+      .card {
+        background: #1a1a1a;
+        border-radius: 10px;
+        overflow: hidden;
+        border: 1px solid #2a2a2a;
+      }
+      .card img {
+        width: 100%;
+        aspect-ratio: 1;
+        object-fit: cover;
+        display: block;
+      }
+      .card .path {
+        padding: 0.5rem 0.75rem;
+        font-size: 0.75rem;
+        color: #888;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .status {
+        color: #888;
+        font-size: 0.9rem;
+        margin-bottom: 1rem;
+      }
+      .error {
+        color: #f87171;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Image Search</h1>
+    <p class="sub">
+      Search your images by description using Gemini Embedding 2
+    </p>
+
+    <div class="search-row">
+      <input
+        type="text"
+        id="query"
+        placeholder="e.g. beach sunset, dog playing, red car"
+        autofocus
+      />
+      <button id="search">Search</button>
+    </div>
+    <div class="search-row">
+      <input
+        type="text"
+        id="pathInput"
+        placeholder="/path/to/image.png or /path/to/folder"
+      />
+      <button id="vectorize" class="btn-secondary">Vectorize</button>
+    </div>
+
+    <p class="status" id="status"></p>
+    <div class="grid" id="results"></div>
+
+    <script>
+      const queryEl = document.getElementById("query");
+      const searchBtn = document.getElementById("search");
+      const pathInputEl = document.getElementById("pathInput");
+      const vectorizeBtn = document.getElementById("vectorize");
+      const statusEl = document.getElementById("status");
+      const resultsEl = document.getElementById("results");
+
+      async function search() {
+        const q = queryEl.value.trim();
+        if (!q) return;
+        searchBtn.disabled = true;
+        statusEl.textContent = "Searching...";
+        statusEl.classList.remove("error");
+        resultsEl.innerHTML = "";
+        try {
+          const res = await fetch("/api/search", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ query: q, limit: 20 }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Search failed");
+          const paths = data.results || [];
+          statusEl.textContent = paths.length
+            ? `Found ${paths.length} images`
+            : "No results";
+          paths.forEach((p) => {
+            const card = document.createElement("div");
+            card.className = "card";
+            const img = document.createElement("img");
+            img.src = "/api/image?path=" + encodeURIComponent(p);
+            img.alt = p;
+            img.onerror = () => {
+              img.src =
+                'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect fill="%23333" width="100" height="100"/><text x="50" y="50" fill="%23888" text-anchor="middle" dy=".3em" font-size="12">No preview</text></svg>';
+            };
+            const pathEl = document.createElement("div");
+            pathEl.className = "path";
+            pathEl.textContent = p;
+            card.appendChild(img);
+            card.appendChild(pathEl);
+            resultsEl.appendChild(card);
+          });
+        } catch (e) {
+          statusEl.textContent = "Error: " + e.message;
+          statusEl.classList.add("error");
+        }
+        searchBtn.disabled = false;
+      }
+
+      async function vectorize() {
+        const path = pathInputEl.value.trim();
+        if (!path) {
+          statusEl.textContent = "Enter a path (image or folder)";
+          statusEl.classList.add("error");
+          return;
+        }
+        vectorizeBtn.disabled = true;
+        statusEl.textContent = "Vectorizing...";
+        statusEl.classList.remove("error");
+        resultsEl.innerHTML = "";
+        try {
+          const res = await fetch("/api/vectorize", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ path }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Vectorize failed");
+          statusEl.textContent = `Done: ${data.processed} processed, ${data.skipped} skipped (${data.total} total)`;
+        } catch (e) {
+          statusEl.textContent = "Error: " + e.message;
+          statusEl.classList.add("error");
+        }
+        vectorizeBtn.disabled = false;
+      }
+
+      searchBtn.addEventListener("click", search);
+      queryEl.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") search();
+      });
+      vectorizeBtn.addEventListener("click", vectorize);
+    </script>
+  </body>
+</html>

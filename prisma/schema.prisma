@@ -1,0 +1,23 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Image {
+  id        String   @id @default(cuid())
+  path      String   @unique
+  createdAt DateTime @default(now())
+}
+
+model ImageEmbedding {
+  id        String   @id @default(cuid())
+  path      String   @unique
+  embedding Unsupported("vector(3072)")?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("image_embeddings")
+}
